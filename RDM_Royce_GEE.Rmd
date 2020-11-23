@@ -1,0 +1,204 @@
+---
+title: "RDM_Royce_GEE"
+author: "Zhehan"
+date: "11/8/2020"
+output: html_document
+---
+
+#Package
+```{r}
+library(ggplot2)
+library(tidyr)
+library(qdapRegex)
+library(raster)
+```
+#Read shapefile
+```{r}
+path_loc <- "C:/Users/tangz/Box Sync/RDM_GEE/Location"
+RDM_Royce<- read.csv(file.path(path_loc, "RDM_Soil_Geography.csv"))
+head(RDM_Royce)
+```
+
+
+#Read data from GEE
+##TOA reflectance
+```{r}
+path_toa <- "C:/Users/tangz/Box Sync/RDM_GEE/GEE/TOA"
+s2toa_ts_names <- list.files(path_toa, full.names = TRUE, pattern = "ts.csv")
+s2toa_ts_list <- list()
+
+read_ts <- function(filenames){
+  ts <- read.csv(filenames)
+  names(ts)[1] <- "Date"
+  ts <- ts[,c("Date","Latitude","Longitude","imageId","mean")]
+  ts$Date <- as.Date(sapply(rm_between(ts$Date, left = "", right = "T", extract = TRUE), '[',1), "%Y%m%d")
+  dim(ts)
+  #remove NAs
+  ts <- na.omit(ts)
+  dim(ts)
+  #there are two values per date per point
+  ts <- aggregate(ts$mean, by = list("Date"=ts$Date,"imageId"=ts$imageId,"Latitude" = ts$Latitude, "Longitude" = ts$Longitude), FUN = mean)
+  #add band name 
+  names(ts)[5] <- "mean"
+  ts$Band <- unlist(qdapRegex::ex_between(filenames, left = "S2TOA_", right = "_ts",extract = TRUE))
+  #scale the value 
+  ts[,5] <- ts[,5]*0.0001
+  #merge with the site name 
+  ts <- base::merge(ts, RDM_Royce, by = c("Latitude","Longitude"))
+  return(ts)
+}
+
+#apply the function 
+for(i in 1:length(s2toa_ts_names)){
+  s2toa_ts_list[[i]] <- read_ts(s2toa_ts_names[i])
+}
+#change the list to a data frame 
+s2toa_ts_df <- do.call(rbind, s2toa_ts_list)
+dim(s2toa_ts_df)  #68542, 8
+#convert long to wide
+s2toa_ts_df <- spread(s2toa_ts_df, key = "Band", value = "mean")
+
+```
+
+##BOA reflectance
+```{r}
+path_gee <- "C:/Users/tangz/Box Sync/RDM_GEE/GEE"
+s2_ts_names <- list.files(path_gee, full.names = TRUE, pattern = "ts.csv")
+s2_ts_list <- list()
+
+read_ts <- function(filenames){
+  ts <- read.csv(filenames)
+  names(ts)[1] <- "Date"
+  ts <- ts[,c("Date","Latitude","Longitude","imageId","mean")]
+  ts$Date <- as.Date(sapply(rm_between(ts$Date, left = "", right = "T", extract = TRUE), '[',1), "%Y%m%d")
+  dim(ts)
+  #remove NAs
+  ts <- na.omit(ts)
+  dim(ts)
+  #there are two values per date per point
+  ts <- aggregate(ts$mean, by = list("Date"=ts$Date,"imageId"=ts$imageId,"Latitude" = ts$Latitude, "Longitude" = ts$Longitude), FUN = mean)
+  #add band name 
+  names(ts)[5] <- "mean"
+  ts$Band <- unlist(qdapRegex::ex_between(filenames, left = "S2_", right = "_ts",extract = TRUE))
+  #scale the value 
+  ts[,5] <- ts[,5]*0.0001
+  #merge with the site name 
+  ts <- base::merge(ts, RDM_Royce, by = c("Latitude","Longitude"))
+  return(ts)
+}
+
+#apply the function 
+for(i in 1:length(s2_ts_names)){
+  s2_ts_list[[i]] <- read_ts(s2_ts_names[i])
+}
+#change the list to a data frame 
+s2_ts_df <- do.call(rbind, s2_ts_list)
+dim(s2_ts_df)  #68542, 8
+#convert long to wide
+s2_ts_df <- spread(s2_ts_df, key = "Band", value = "mean")
+```
+
+#Calculate vis 
+##Functions
+```{r}
+ndvi <- function(df){
+  red <- df$B4
+  nir <- df$B8
+  NDVI <- (nir-red)/(nir+red)
+  return(NDVI)
+}
+
+evi <- function(df){
+  red <- df$B4
+  nir <- df$B8
+  blue <- df$B2
+  EVI <- 2.5*(nir-red)/(nir+6*red-7.5*blue+1)
+  return(EVI)
+}
+
+evi2 <- function(df){
+  red <- df$B4
+  nir <- df$B8
+  EVI2 <- 2.4*(nir-red)/(nir+red+1)
+  return(EVI2)
+}
+
+gndvi <- function(df){
+  green <- df$B3
+  nir <- df$B8
+  GNDVI <- (nir-green)/(nir+green)
+  return(GNDVI)
+}
+
+ndre1 <- function(df){
+  nir <- df$B8
+  rededge1 <- df$B5
+  NDRE1 <- (nir-rededge1)/(nir+rededge1)
+  return(NDRE1)
+}
+
+ndre2 <- function(df){
+  nir <- df$B8
+  rededge2 <- df$B6
+  NDRE2 <- (nir-rededge2)/(nir+rededge2)
+  return(NDRE2)
+}
+
+ndre3 <- function(df){
+  nir <- df$B8
+  rededge3 <- df$B7
+  NDRE3 <- (nir-rededge3)/(nir+rededge3)
+  return(NDRE3)
+}
+
+ndwi <- function(df){
+  swir <- df$B11
+  nir <- df$B8
+  NDWI <- (nir-swir)/(nir+swir)
+  return(NDWI)
+}
+
+
+addVIs <- function(df){
+  df$NDVI <- ndvi(df)
+  df$EVI <- evi(df)
+  df$EVI2 <- evi2(df)
+  df$GNDVI <- gndvi(df)
+  df$NDRE1 <- ndre1(df)
+  df$NDRE2 <- ndre2(df)
+  df$NDRE3 <- ndre3(df)
+  df$NDWI <- ndwi(df)
+  return(df)
+}
+
+```
+
+##Implementation
+```{r}
+s2_ts_df <- addVIs(s2_ts_df)
+head(s2_ts_df)
+s2toa_ts_df <- addVIs(s2toa_ts_df)
+head(s2toa_ts_df)
+```
+
+#Plot
+```{r}
+unique(s2_ts_df$Site)
+sample_site <- sample(unique(s2_ts_df$Site), 6)
+sample_site <- c("Pozo","Cambria","Cambria 2")
+sample_site2 <- c("Cal Poly- W6 ","King city")
+ggplot(subset(s2_ts_df,Site %in% sample_site2), aes(x = Date, y = NDVI, color = Site)) + geom_point() + geom_line() + ggtitle("NDVI from S2") + ylim(0,1) + theme_bw() 
+ggplot(subset(s2toa_ts_df,Site %in%sample_site), aes(x = Date, y = NDVI, color = Site)) + geom_point() + geom_line() + ggtitle("NDVI from S2") + ylim(0,1) + theme_bw() 
+
+ggplot(subset(s2_ts_df), aes(x = Date, y = NDVI, color = Site)) + geom_point() + geom_line() + ggtitle("NDVI from S2") + ylim(0,1) + theme_bw() 
+
+```
+
+#Export the csv 
+```{r}
+path_df <- "C:/Users/tangz/Box Sync/RDM_GEE/df"
+write.csv(s2_ts_df, file.path(path_df, "RDM_s2sr_ts.csv"), row.names = FALSE)
+write.csv(s2toa_ts_df, file.path(path_df, "RDM_s2toa_ts.csv"), row.names = FALSE)
+
+```
+
