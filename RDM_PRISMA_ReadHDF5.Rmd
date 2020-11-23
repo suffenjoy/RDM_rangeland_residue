@@ -1,0 +1,182 @@
+---
+title: "RDM_PRISMA"
+author: "Zhehan"
+date: "11/18/2020"
+output: html_document
+---
+
+#packages
+```{r}
+library(rgdal)
+library(hdf5r)
+library(rhdf5)
+library(raster)
+library(prismaread)
+
+```
+#read the shapefile
+```{r}
+path_shp <- "C:/Users/tangz/Box Sync/RDM_GEE/Location"
+rdm_shp <- shapefile(file.path(path_shp, "RDM_Soil_Geography_GEE_XYTableToPoint.shp"))
+rdm_csv <- read.csv(file.path(path_shp, "RDM_Soil_Geography.csv"))
+temp_df <- base::merge(rdm_shp@data, rdm_csv, by = c("Latitude","Longitude"))
+rdm_shp@data <- temp_df[order(temp_df$ID),]
+plot(rdm_shp)
+rdm_shp@data
+
+#subset 
+rdm_shp_1 <- subset(rdm_shp, Site %in% c("Morro Bay N","Morro Bay S","Cal Poly- W6","Cal Poly-EU8-S"))
+rdm_shp_2 <- subset(rdm_shp, Site %in% c("Pozo","Huasna","Rock Pile  Rd (Pozo-2)"))
+#rdm_shp_2 <- subset(rdm_shp, Latitude %in% c(35.36814,35.367664))
+plot(rdm_shp_1, add = TRUE, col = "red")
+```
+
+#Use the prismaread package
+##Read data
+```{r}
+path_prisma <- "D:/PRISMA/Images"
+path_tiffs <- "D:/PRISMA/Tiffs"
+pr_convert(in_file = file.path(path_prisma, "PRS_L2B_STD_20201115190101_20201115190105_0001.he5"), out_folder = path_tiffs, out_format = "GTiff", VNIR = TRUE, SWIR = TRUE, LATLON = TRUE, ANGLES = TRUE)
+pr_convert(in_file = file.path(path_prisma, "PRS_L2B_STD_20201109185746_20201109185751_0001.he5"), out_folder = path_tiffs, out_format = "GTiff", VNIR = TRUE, SWIR = TRUE, LATLON = TRUE, ANGLES = TRUE)
+
+
+list.files(path_tiffs)
+#first one 
+vnir_1 <- raster::brick(file.path(path_tiffs, "PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_VNIR.tif"))
+vnir_1
+swir_1 <- raster::brick(file.path(path_tiffs, "PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_SWIR.tif"))
+swir_1
+raster::plot(vnir_1[[30]])
+plot(rdm_shp_1, add = TRUE)
+#second one 
+vnir_2 <- raster::brick(file.path(path_tiffs, "PRS_L2B_STD_20201109185746_20201109185751_0001_HCO_VNIR.tif"))
+swir_2 <- raster::brick(file.path(path_tiffs, "PRS_L2B_STD_20201109185746_20201109185751_0001_HCO_SWIR.tif"))
+
+#wavelength of 1
+wvl_vnir <- read.table(file.path(path_tiffs, "PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_VNIR.wvl"))
+wvl_vnir <- wvl_vnir$V3
+wvl_vnir <- round(as.numeric(as.character(wvl_vnir)),1)
+wvl_vnir
+wvl_swir <- read.table(file.path(path_tiffs, "PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_SWIR.wvl"))
+wvl_swir <- wvl_swir$V3
+wvl_swir <- round(as.numeric(as.character(wvl_swir)),1)
+wvl_swir
+#wavelength of 2
+wvl_vnir2 <- read.table(file.path(path_tiffs, "PRS_L2B_STD_20201109185746_20201109185751_0001_HCO_VNIR.wvl"))
+wvl_vnir2
+wvl_vnir2 <- wvl_vnir2$V3
+wvl_vnir2 <- round(as.numeric(as.character(wvl_vnir2)),1)
+wvl_vnir2
+wvl_swir2 <- read.table(file.path(path_tiffs, "PRS_L2B_STD_20201109185746_20201109185751_0001_HCO_SWIR.wvl"))
+wvl_swir2
+wvl_swir2 <- wvl_swir2$V3
+wvl_swir2 <- round(as.numeric(as.character(wvl_swir2)),1)
+wvl_swir2
+
+plot(rdm_shp)
+plot(vnir_2[[30]], add= TRUE)
+plot(rdm_shp, add = TRUE, col = "red")
+```
+##extract from points
+```{r}
+#test_1 <- pr_extract_spectra(system.file(file.path(path_tiffs,"PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_VNIR.tif"),package = "prismaread"), system.file(file.path(path_shp, "RDM_Soil_Geography_GEE_XYTableToPoint.shp"), package = "prismaread"), id_field = "Field_ID")
+#first one 
+ext_vnir_1 <- raster::extract(vnir_1, rdm_shp_1, FUN = mean, df = TRUE, method = "simple")
+dim(ext_vnir_1) #4,64
+names(ext_vnir_1) <- wvl_vnir
+rownames(ext_vnir_1) <- rdm_shp_1$Site
+ext_vnir_1
+
+ext_swir_1 <- raster::extract(swir_1, rdm_shp_1, FUN = mean, df = TRUE, method = "simple")
+dim(ext_swir_1) #4,172
+names(ext_swir_1) <- wvl_swir
+rownames(ext_swir_1) <- rdm_shp_1$Site
+
+ext_1 <- cbind(ext_vnir_1, ext_swir_1)
+ext_1
+#second one 
+ext_vnir_2 <- raster::extract(vnir_2, rdm_shp_2, FUN = mean, df = TRUE, method = "simple")
+dim(ext_vnir_2) #3,64
+names(ext_vnir_2) <- wvl_vnir
+rownames(ext_vnir_2) <- rdm_shp_2$Site
+ext_vnir_2
+
+ext_swir_2 <- raster::extract(swir_2, rdm_shp_2, FUN = mean, df = TRUE, method = "simple")
+dim(ext_swir_2) #3,172
+names(ext_swir_2) <- wvl_swir
+rownames(ext_swir_2) <- rdm_shp_2$Site
+ext_swir_2
+
+ext_2 <- cbind(ext_vnir_2, ext_swir_2)
+ext_2
+
+```
+
+#Cellulose Absorption Index 
+##Functions
+```{r}
+CAI1 <- function(df){
+  X2030 <- (df$'2027.5'+df$'2036')/2
+  X2210 <- (df$'2206.6'+df$'2214.3')/2
+  X2100 <- df$'2102.5'
+  cai1 <- 100*(0.5*(X2030+X2210)-X2100)
+  return(cai1)
+}
+
+CAI2 <- function(df){
+  X2020 <- df$'2019'
+  X2220 <- df$'2222.2'
+  X2100 <- df$'2102.5'
+  cai2 <- 0.5*(X2020+X2220)-X2100
+}
+
+vis_df <- function(df){
+  df$CAI1 <- CAI1(df)
+  df$CAI2 <- CAI2(df)
+  return(df)
+}
+```
+##Apply the function
+```{r}
+ext_1 <- vis_df(ext_1)
+ext_1$CAI1 #70.44735 97.08903 61.25853 62.70332
+ext_1$CAI2 #-0.09708905  0.18608761 -0.03698635 -0.03351879
+
+ext_2 <- vis_df(ext_2)
+ext_2$CAI1 #90.90897 27.72782 47.79012
+ext_2$CAI2 #0.2024190 -0.3629173 -0.5294039
+
+ext_12 <- rbind(ext_1, ext_2)
+
+#output 
+path_df <- "C:/Users/tangz/Box Sync/RDM_GEE/df"
+write.csv(ext_12, file.path(path_df,"PRISMA_Nov_7sites.csv"))
+```
+#Export 
+```{r}
+
+```
+
+
+#----------------Not Useful---------------------------------------------
+#Read HDF5
+```{r}
+path_prisma <- "D:/PRISMA/Images"
+list.files(path_prisma)
+prisma_h5f <- H5Fopen(file.path(path_prisma, "PRS_L2B_STD_20201115190101_20201115190105_0001.he5"))
+prisma_h5f
+a <- prisma_h5f&'HDFEOS'
+
+
+prisma_1 <- h5read(file.path(path_prisma, "PRS_L2B_STD_20201115190101_20201115190105_0001.he5"),name = "HDFEOS")
+a <- prisma_1$SWATHS
+class(a)
+dim(a$PRS_L2B_HCO$`Data Fields`$SWIR_Cube)
+dim(a$PRS_L2B_HCO$`Data Fields`$VNIR_Cube)
+dim(a$PRS_L2B_HCO$`Data Fields`$SWIR_PIXEL_L2_ERR_MATRIX)
+dim(a$PRS_L2B_PCO$`Geolocation Fields`$Latitude)
+dim(a$PRS_L2B_PCO$`Geolocation Fields`$Longitude)
+a$PRS_L2B_HCO$`Geolocation Fields`$Time
+
+```
+
