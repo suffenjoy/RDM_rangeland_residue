@@ -1,0 +1,188 @@
+---
+title: "RDM_GEE"
+author: "Zhehan"
+date: "11/2/2020"
+output: html_document
+---
+
+#package
+```{r}
+library(ggplot2)
+library(tidyr)
+```
+
+#read data
+```{r}
+path_gee <- "C:/Users/tangz/Box Sync/RDM_GEE/GEE"
+cambria_S2 <- read.csv(file.path(path_gee, "cambria_S2.csv"))
+cambria_S2SR <- read.csv(file.path(path_gee, "cambria_S2SR.csv"))
+pozo_S2 <- read.csv(file.path(path_gee, "pozo_S2.csv"))
+pozo_S2SR <- read.csv(file.path(path_gee, "pozo_S2SR.csv"))
+
+```
+
+#clean data
+```{r}
+names(cambria_S2)[1] <- "Date"
+cambria_S2$Date <- as.Date(cambria_S2$Date, format = "%b %d, %Y")
+cambria_S2$Date[1]
+#remove NAs
+dim(cambria_S2) #584.11
+cambria_S2 <- na.omit(cambria_S2)
+dim(cambria_S2) #422, 11
+#there are two values per date per point 
+cambria_S2 <- aggregate(cambria_S2[,-1], by = list("Date"=cambria_S2$Date), FUN= mean)
+dim(cambria_S2)  #395,11
+
+names(cambria_S2SR)[1] <- "Date"
+cambria_S2SR$Date <- as.Date(cambria_S2SR$Date, format = "%b %d, %Y")
+cambria_S2SR$Date[1]
+#remove NAs
+dim(cambria_S2SR)  #277,11
+cambria_S2SR <- na.omit(cambria_S2SR)
+dim(cambria_S2SR) #200, 5
+#there are two values per date per point 
+cambria_S2SR <- aggregate(cambria_S2SR[,-1], by = list("Date"=cambria_S2SR$Date), FUN= mean)
+dim(cambria_S2SR)  #199,5
+
+names(pozo_S2)[1] <- "Date"
+pozo_S2$Date <- as.Date(pozo_S2$Date, format = "%b %d, %Y")
+pozo_S2$Date[1]
+#remove NAs
+dim(pozo_S2)  #634,11
+pozo_S2 <- na.omit(pozo_S2)
+dim(pozo_S2) #500, 5
+#there are two values per date per point 
+pozo_S2 <- aggregate(pozo_S2[,-1], by = list("Date"=pozo_S2$Date), FUN= mean)
+dim(pozo_S2)  #231,5
+
+names(pozo_S2SR)[1] <- "Date"
+pozo_S2SR$Date <- as.Date(pozo_S2SR$Date, format = "%b %d, %Y")
+pozo_S2SR$Date[1]
+#remove NAs
+dim(pozo_S2SR)  #276,11
+pozo_S2SR <- na.omit(pozo_S2SR)
+dim(pozo_S2SR) #222, 5
+#there are two values per date per point 
+pozo_S2SR <- aggregate(pozo_S2SR[,-1], by = list("Date"=pozo_S2SR$Date), FUN= mean)
+dim(pozo_S2SR)  #111,5
+
+```
+
+#add indices 
+##Functions
+```{r}
+ndvi <- function(df){
+  red <- df$B4
+  nir <- df$B8
+  NDVI <- (nir-red)/(nir+red)
+  return(NDVI)
+}
+
+evi <- function(df){
+  red <- df$B4
+  nir <- df$B8
+  blue <- df$B2
+  EVI <- 2.5*(nir-red)/(nir+6*red-7.5*blue+1)
+  return(EVI)
+}
+
+evi2 <- function(df){
+  red <- df$B4
+  nir <- df$B8
+  EVI2 <- 2.4*(nir-red)/(nir+red+1)
+  return(EVI2)
+}
+
+gndvi <- function(df){
+  green <- df$B3
+  nir <- df$B8
+  GNDVI <- (nir-green)/(nir+green)
+  return(GNDVI)
+}
+
+ndre1 <- function(df){
+  nir <- df$B8
+  rededge1 <- df$B5
+  NDRE1 <- (nir-rededge1)/(nir+rededge1)
+  return(NDRE1)
+}
+
+ndre2 <- function(df){
+  nir <- df$B8
+  rededge2 <- df$B6
+  NDRE2 <- (nir-rededge2)/(nir+rededge2)
+  return(NDRE2)
+}
+
+ndre3 <- function(df){
+  nir <- df$B8
+  rededge3 <- df$B7
+  NDRE3 <- (nir-rededge3)/(nir+rededge3)
+  return(NDRE3)
+}
+
+ndwi <- function(df){
+  swir <- df$B11
+  nir <- df$B8
+  NDWI <- (nir-swir)/(nir+swir)
+  return(NDWI)
+}
+
+
+addVIs <- function(df){
+  df$NDVI <- ndvi(df)
+  df$EVI <- evi(df)
+  df$EVI2 <- evi2(df)
+  df$GNDVI <- gndvi(df)
+  df$NDRE1 <- ndre1(df)
+  df$NDRE2 <- ndre2(df)
+  df$NDRE3 <- ndre3(df)
+  df$NDWI <- ndwi(df)
+  return(df)
+}
+```
+
+##Implement functions
+```{r}
+cambria_S2 <- addVIs(cambria_S2)
+cambria_S2SR <- addVIs(cambria_S2SR)
+pozo_S2 <- addVIs(pozo_S2)
+pozo_S2SR <- addVIs(pozo_S2SR)
+
+```
+#Plot
+```{r}
+p1 = ggplot(cambria_S2, aes(x = Date, y = EVI)) + geom_point() + geom_line() + ggtitle("Cambria S2") + ylim(0,1)
+p2 = ggplot(cambria_S2SR, aes(x = Date, y = EVI)) + geom_point() + geom_line() + ggtitle("Cambria S2 Surface Reflectance") + ylim(0,1)
+p3 = ggplot(pozo_S2, aes(x = Date, y = EVI)) + geom_point() + geom_line() + ggtitle("Pozo S2") + ylim(0,1)
+p4 = ggplot(pozo_S2SR, aes(x = Date, y = EVI)) + geom_point() + geom_line() + ggtitle("Pozo S2 Surface Reflectance") + ylim(0,1)
+gridExtra::grid.arrange(p1,p2,p3,p4, nrow = 2)
+
+
+p1 = ggplot(cambria_S2, aes(x = Date, y = NDVI)) + geom_point() + geom_line() + ggtitle("Cambria S2") + ylim(0,1)
+p2 = ggplot(cambria_S2SR, aes(x = Date, y = NDVI)) + geom_point() + geom_line() + ggtitle("Cambria S2 Surface Reflectance") + ylim(0,1)
+p3 = ggplot(pozo_S2, aes(x = Date, y = NDVI)) + geom_point() + geom_line() + ggtitle("Pozo S2") + ylim(0,1)
+p4 = ggplot(pozo_S2SR, aes(x = Date, y = NDVI)) + geom_point() + geom_line() + ggtitle("Pozo S2 Surface Reflectance") + ylim(0,1)
+gridExtra::grid.arrange(p1,p2,p3,p4, nrow = 2)
+
+
+p1 = ggplot(cambria_S2, aes(x = Date, y = NDWI)) + geom_point() + geom_line() + ggtitle("Cambria S2") + ylim(-0.4,0.5)
+p2 = ggplot(cambria_S2SR, aes(x = Date, y = NDWI)) + geom_point() + geom_line() + ggtitle("Cambria S2 Surface Reflectance") + ylim(-0.4,0.5)
+p3 = ggplot(pozo_S2, aes(x = Date, y = NDWI)) + geom_point() + geom_line() + ggtitle("Pozo S2") + ylim(-0.4,0.5)
+p4 = ggplot(pozo_S2SR, aes(x = Date, y = NDWI)) + geom_point() + geom_line() + ggtitle("Pozo S2 Surface Reflectance") + ylim(-0.4,0.5)
+gridExtra::grid.arrange(p1,p2,p3,p4, nrow = 2)
+
+
+```
+
+#export the csv
+```{r}
+path_df <- "C:/Users/tangz/Box Sync/RDM_GEE/df"
+write.csv(cambria_S2, file.path(path_df, "cambria_S2.csv"), row.names = FALSE)
+write.csv(cambria_S2SR, file.path(path_df, "cambria_S2SR.csv"), row.names = FALSE)
+write.csv(pozo_S2, file.path(path_df, "pozo_S2.csv"), row.names = FALSE)
+write.csv(pozo_S2SR, file.path(path_df, "pozo_S2SR.csv"), row.names = FALSE)
+
+```
+
