@@ -36,8 +36,12 @@ plot(rdm_shp_1, add = TRUE, col = "red")
 ```{r}
 path_prisma <- "D:/PRISMA/Images"
 path_tiffs <- "D:/PRISMA/Tiffs"
+#L2B
 pr_convert(in_file = file.path(path_prisma, "PRS_L2B_STD_20201115190101_20201115190105_0001.he5"), out_folder = path_tiffs, out_format = "GTiff", VNIR = TRUE, SWIR = TRUE, LATLON = TRUE, ANGLES = TRUE)
 pr_convert(in_file = file.path(path_prisma, "PRS_L2B_STD_20201109185746_20201109185751_0001.he5"), out_folder = path_tiffs, out_format = "GTiff", VNIR = TRUE, SWIR = TRUE, LATLON = TRUE, ANGLES = TRUE)
+#L2D
+pr_convert(in_file = file.path(path_prisma, "PRS_L2D_STD_20201115190101_20201115190105_0001.he5"), out_folder = path_tiffs, out_format = "GTiff", VNIR = TRUE, SWIR = TRUE, LATLON = TRUE, ANGLES = TRUE)
+pr_convert(in_file = file.path(path_prisma, "PRS_L2D_STD_20201109185746_20201109185751_0001.he5"), out_folder = path_tiffs, out_format = "GTiff", VNIR = TRUE, SWIR = TRUE, LATLON = TRUE, ANGLES = TRUE)
 
 
 list.files(path_tiffs)
@@ -51,7 +55,18 @@ plot(rdm_shp_1, add = TRUE)
 #second one 
 vnir_2 <- raster::brick(file.path(path_tiffs, "PRS_L2B_STD_20201109185746_20201109185751_0001_HCO_VNIR.tif"))
 swir_2 <- raster::brick(file.path(path_tiffs, "PRS_L2B_STD_20201109185746_20201109185751_0001_HCO_SWIR.tif"))
+#third one 
+vnir_3 <- raster::brick(file.path(path_tiffs, "PRS_L2D_STD_20201115190101_20201115190105_0001_HCO_VNIR.tif"))
+swir_3 <- raster::brick(file.path(path_tiffs, "PRS_L2D_STD_20201115190101_20201115190105_0001_HCO_SWIR.tif"))
+#fourth one 
+vnir_4 <- raster::brick(file.path(path_tiffs, "PRS_L2D_STD_20201109185746_20201109185751_0001_HCO_VNIR.tif"))
+swir_4 <- raster::brick(file.path(path_tiffs, "PRS_L2D_STD_20201109185746_20201109185751_0001_HCO_SWIR.tif"))
 
+
+
+```
+###Wavelength
+```{r}
 #wavelength of 1
 wvl_vnir <- read.table(file.path(path_tiffs, "PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_VNIR.wvl"))
 wvl_vnir <- wvl_vnir$V3
@@ -73,11 +88,33 @@ wvl_swir2 <- wvl_swir2$V3
 wvl_swir2 <- round(as.numeric(as.character(wvl_swir2)),1)
 wvl_swir2
 
-plot(rdm_shp)
-plot(vnir_2[[30]], add= TRUE)
-plot(rdm_shp, add = TRUE, col = "red")
+#wavelength of no.3
+wvl_vnir3 <- read.table(file.path(path_tiffs, "PRS_L2D_STD_20201115190101_20201115190105_0001_HCO_VNIR.wvl"))
+wvl_vnir3
+wvl_vnir3 <- wvl_vnir3$V3
+wvl_vnir3 <- round(as.numeric(as.character(wvl_vnir3)),1)
+wvl_vnir3
+wvl_swir3 <- read.table(file.path(path_tiffs, "PRS_L2D_STD_20201115190101_20201115190105_0001_HCO_SWIR.wvl"))
+wvl_swir3
+wvl_swir3 <- wvl_swir3$V3
+wvl_swir3 <- round(as.numeric(as.character(wvl_swir3)),1)
+wvl_swir3
+
 ```
-##extract from points
+
+##Change shapefile crs to match with l2d data
+```{r}
+rdm_shp_utm <- spTransform(rdm_shp, crs(vnir_3))
+rdm_shp_1_utm <- spTransform(rdm_shp_1, crs(vnir_3))
+rdm_shp_2_utm <- spTransform(rdm_shp_2, crs(vnir_3))
+plot(rdm_shp_utm)
+plot(vnir_3[[30]], add = TRUE)
+
+plot(rdm_shp_1_utm, add = TRUE)
+plot(rdm_shp_2_utm, add = TRUE)
+```
+
+##Extract from points
 ```{r}
 #test_1 <- pr_extract_spectra(system.file(file.path(path_tiffs,"PRS_L2B_STD_20201115190101_20201115190105_0001_HCO_VNIR.tif"),package = "prismaread"), system.file(file.path(path_shp, "RDM_Soil_Geography_GEE_XYTableToPoint.shp"), package = "prismaread"), id_field = "Field_ID")
 #first one 
@@ -109,6 +146,38 @@ ext_swir_2
 
 ext_2 <- cbind(ext_vnir_2, ext_swir_2)
 ext_2
+
+#Third one, Level-2d data
+ext_vnir_3 <- raster::extract(vnir_3, rdm_shp_1_utm, FUN = mean, df = TRUE, method = "simple")
+dim(ext_vnir_3) #4,64
+names(ext_vnir_3) <- wvl_vnir
+rownames(ext_vnir_3) <- rdm_shp_1_utm$Site
+ext_vnir_3
+
+ext_swir_3 <- raster::extract(swir_3, rdm_shp_1_utm, FUN = mean, df = TRUE, method = "simple")
+dim(ext_swir_3) #3,172
+names(ext_swir_3) <- wvl_swir
+rownames(ext_swir_3) <- rdm_shp_1_utm$Site
+ext_swir_3
+
+ext_3 <- cbind(ext_vnir_3, ext_swir_3)
+ext_3
+
+#Fourth one, level-2d data
+ext_vnir_4 <- raster::extract(vnir_4, rdm_shp_2_utm, FUN = mean, df = TRUE, method = "simple")
+dim(ext_vnir_4) #4,64
+names(ext_vnir_4) <- wvl_vnir
+rownames(ext_vnir_4) <- rdm_shp_2_utm$Site
+ext_vnir_4
+
+ext_swir_4 <- raster::extract(swir_4, rdm_shp_2_utm, FUN = mean, df = TRUE, method = "simple")
+dim(ext_swir_4) #3,172
+names(ext_swir_4) <- wvl_swir
+rownames(ext_swir_4) <- rdm_shp_2_utm$Site
+ext_swir_4
+
+ext_4 <- cbind(ext_vnir_4, ext_swir_4)
+ext_4
 
 ```
 
@@ -148,12 +217,21 @@ ext_2$CAI2 #0.2024190 -0.3629173 -0.5294039
 
 ext_12 <- rbind(ext_1, ext_2)
 
-#output 
-path_df <- "C:/Users/tangz/Box Sync/RDM_GEE/df"
-write.csv(ext_12, file.path(path_df,"PRISMA_Nov_7sites.csv"))
+ext_3 <- vis_df(ext_3)
+ext_3$CAI1 #4.729915 6.484704 3.976502 3.871977
+ext_3$CAI2 #0.010940716 0.005294889 0.014122225 0.006271452
+
+ext_4 <- vis_df(ext_4)
+ext_4$CAI1 #5.989166 2.496757 2.128252
+ext_4$CAI2 #0.02198826 -0.01533531 -0.02054626
+
+ext_34 <- rbind(ext_3, ext_4)
 ```
 #Export 
 ```{r}
+#output 
+path_df <- "C:/Users/tangz/Box Sync/RDM_GEE/df"
+write.csv(ext_34, file.path(path_df,"PRISMA_Nov_7sites.csv"))
 
 ```
 
